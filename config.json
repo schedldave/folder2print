@@ -9,5 +9,5 @@
     "print_delay_seconds": 2,
     "move_delete_delay_seconds": 60,
     "print_method": "acrobat",
-    "acrobat_path": "C:\\Program Files\\Adobe\\Acrobat DC\\Acrobat\\Acrobat.exe"
+    "acrobat_path": "C:\\Program Files (x86)\\Adobe\\Acrobat Reader DC\\Reader\\AcroRd32.exe"
 }
