@@ -15,7 +15,7 @@ Automatically print PDF files from a watched folder. When a PDF file is synchron
 
 - Windows 10/11
 - Python 3.8+
-- A PDF reader installed (Adobe Reader, Foxit, etc.)
+- Adobe Acrobat or Acrobat Reader (recommended for `acrobat` print method)
 
 ## Installation
 
@@ -48,7 +48,10 @@ Edit `config.json`:
     "move_after_print": true,
     "printed_folder": "printed",
     "file_extensions": [".pdf"],
-    "print_delay_seconds": 2
+    "print_delay_seconds": 2,
+    "move_delete_delay_seconds": 60,
+    "print_method": "acrobat",
+    "acrobat_path": "C:\\Program Files\\Adobe\\Acrobat DC\\Acrobat\\Acrobat.exe"
 }
 ```
 
@@ -64,6 +67,19 @@ Edit `config.json`:
 | `printed_folder` | Subfolder name for printed files | "printed" |
 | `file_extensions` | File types to monitor | [".pdf"] |
 | `print_delay_seconds` | Extra delay before printing (for sync) | 2 |
+| `move_delete_delay_seconds` | Delay before moving/deleting after print | 60 |
+| `print_method` | Printing method: `acrobat` or `shellexecute` | "acrobat" |
+| `acrobat_path` | Path to Acrobat executable (auto-detected if empty) | Auto-detect |
+
+### Print Methods
+
+**`acrobat` (recommended)**: Uses Adobe Acrobat/Reader command line (`/t` switch) for reliable silent printing. The path is auto-detected from common installation locations, or you can specify it manually.
+
+Common Acrobat paths:
+- Acrobat DC: `C:\Program Files\Adobe\Acrobat DC\Acrobat\Acrobat.exe`
+- Acrobat Reader DC: `C:\Program Files\Adobe\Acrobat Reader DC\Reader\AcroRd32.exe`
+
+**`shellexecute`**: Uses Windows ShellExecute with the "print" verb. Works with any PDF application but may show dialogs.
 
 ## Usage
 
@@ -124,14 +140,25 @@ Logs are written to:
 - The file may still be syncing
 - Increase `print_delay_seconds` in config
 
+### "Acrobat executable not found"
+- Install Adobe Acrobat or Acrobat Reader
+- Set `acrobat_path` in config.json to the correct path
+- Or switch to `"print_method": "shellexecute"`
+
 ### PDF doesn't print
-- Ensure you have a PDF reader installed (Adobe Reader, Foxit, etc.)
-- The PDF reader handles the actual printing
+- Check the log file `folder2print.log` for errors
+- Verify Acrobat can open the PDF manually
+- Try switching `print_method` between `acrobat` and `shellexecute`
 
 ### Files not detected
 - Check that `watch_folder` path is correct
 - Ensure the folder exists
 - Check file extension matches `file_extensions` config
+
+### Print job sent but nothing prints
+- Increase `move_delete_delay_seconds` to give more time for printing
+- Check printer queue in Windows settings
+- Verify printer is online and has paper
 
 ## License
 

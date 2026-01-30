@@ -9,6 +9,7 @@ import json
 import logging
 import os
 import shutil
+import subprocess
 import sys
 import time
 from datetime import datetime
@@ -47,6 +48,8 @@ class Config:
         self.file_extensions: list = [".pdf"]
         self.print_delay_seconds: int = 2
         self.move_delete_delay_seconds: int = 60
+        self.print_method: str = "acrobat"  # "acrobat" or "shellexecute"
+        self.acrobat_path: str = ""
 
         self.load()
 
@@ -65,6 +68,12 @@ class Config:
             self.file_extensions = data.get("file_extensions", [".pdf"])
             self.print_delay_seconds = data.get("print_delay_seconds", 2)
             self.move_delete_delay_seconds = data.get("move_delete_delay_seconds", 60)
+            self.print_method = data.get("print_method", "acrobat")
+            self.acrobat_path = data.get("acrobat_path", "")
+
+            # Auto-detect Acrobat path if not specified
+            if not self.acrobat_path:
+                self.acrobat_path = self._find_acrobat_path()
 
             logger.info(f"Configuration loaded from {self.config_path}")
 
@@ -89,6 +98,9 @@ class Config:
             "printed_folder": "printed",
             "file_extensions": [".pdf"],
             "print_delay_seconds": 2,
+            "move_delete_delay_seconds": 60,
+            "print_method": "acrobat",
+            "acrobat_path": "",
         }
 
         with open(self.config_path, "w", encoding="utf-8") as f:
@@ -109,7 +121,34 @@ class Config:
         if not self.printer_name:
             logger.warning("No printer configured. Will use default printer.")
 
+        if self.print_method == "acrobat":
+            if not self.acrobat_path or not os.path.isfile(self.acrobat_path):
+                logger.error(f"Acrobat executable not found: {self.acrobat_path}")
+                logger.info("Set 'acrobat_path' in config or use 'print_method': 'shellexecute'")
+                return False
+
         return True
+
+    def _find_acrobat_path(self) -> str:
+        """Auto-detect Adobe Acrobat/Reader installation path."""
+        possible_paths = [
+            # Acrobat DC (paid version)
+            r"C:\Program Files\Adobe\Acrobat DC\Acrobat\Acrobat.exe",
+            r"C:\Program Files (x86)\Adobe\Acrobat DC\Acrobat\Acrobat.exe",
+            # Acrobat Reader DC (free version)
+            r"C:\Program Files\Adobe\Acrobat Reader DC\Reader\AcroRd32.exe",
+            r"C:\Program Files (x86)\Adobe\Acrobat Reader DC\Reader\AcroRd32.exe",
+            # Older versions
+            r"C:\Program Files\Adobe\Reader 11.0\Reader\AcroRd32.exe",
+            r"C:\Program Files (x86)\Adobe\Reader 11.0\Reader\AcroRd32.exe",
+        ]
+
+        for path in possible_paths:
+            if os.path.isfile(path):
+                logger.info(f"Auto-detected Acrobat at: {path}")
+                return path
+
+        return ""
 
 
 def get_available_printers() -> list:
@@ -134,12 +173,70 @@ def get_default_printer() -> Optional[str]:
         return None
 
 
-def print_pdf(file_path: str, printer_name: str) -> bool:
+def print_pdf_acrobat(file_path: str, printer_name: str, acrobat_path: str) -> bool:
     """
-    Print a PDF file to the specified printer.
+    Print a PDF file using Adobe Acrobat/Reader command line.
 
-    Uses the Windows ShellExecute 'print' verb which works with the
-    default PDF application (Adobe Reader, etc.).
+    Uses the /t switch which prints to specified printer and exits.
+    Command: Acrobat.exe /t "file.pdf" "printer_name"
+    """
+    try:
+        if not os.path.exists(file_path):
+            logger.error(f"File not found: {file_path}")
+            return False
+
+        if not os.path.isfile(acrobat_path):
+            logger.error(f"Acrobat executable not found: {acrobat_path}")
+            return False
+
+        # Use the default printer if none specified
+        if not printer_name:
+            default = get_default_printer()
+            if not default:
+                logger.error("No printer available")
+                return False
+            printer_name = default
+
+        logger.info(f"Printing with Acrobat: {file_path} to {printer_name}")
+
+        # Build the command
+        # /t = print to specified printer and exit
+        # /h = start minimized
+        cmd = [
+            acrobat_path,
+            "/t",
+            file_path,
+            printer_name
+        ]
+
+        logger.info(f"Executing: {' '.join(cmd)}")
+
+        # Run Acrobat with the print command
+        # Using subprocess.Popen so we don't block waiting for Acrobat
+        process = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            creationflags=subprocess.CREATE_NO_WINDOW
+        )
+
+        # Wait a bit for the print job to be submitted
+        # Acrobat needs time to start, process the PDF, and send to printer
+        time.sleep(5)
+
+        logger.info(f"Print job sent successfully via Acrobat: {file_path}")
+        return True
+
+    except Exception as e:
+        logger.error(f"Error printing {file_path} with Acrobat: {e}")
+        return False
+
+
+def print_pdf_shellexecute(file_path: str, printer_name: str) -> bool:
+    """
+    Print a PDF file using Windows ShellExecute.
+
+    Uses the 'print' verb which works with the default PDF application.
     """
     try:
         if not os.path.exists(file_path):
@@ -154,7 +251,7 @@ def print_pdf(file_path: str, printer_name: str) -> bool:
                 return False
             printer_name = default
 
-        logger.info(f"Printing: {file_path} to {printer_name}")
+        logger.info(f"Printing with ShellExecute: {file_path} to {printer_name}")
 
         # Set the printer as default temporarily for ShellExecute
         original_printer = get_default_printer()
@@ -188,6 +285,18 @@ def print_pdf(file_path: str, printer_name: str) -> bool:
     except Exception as e:
         logger.error(f"Error printing {file_path}: {e}")
         return False
+
+
+def print_pdf(file_path: str, printer_name: str, config: "Config") -> bool:
+    """
+    Print a PDF file using the configured method.
+
+    Dispatches to either Acrobat command line or ShellExecute based on config.
+    """
+    if config.print_method == "acrobat":
+        return print_pdf_acrobat(file_path, printer_name, config.acrobat_path)
+    else:
+        return print_pdf_shellexecute(file_path, printer_name)
 
 
 def is_file_ready(file_path: str, timeout: int = 30) -> bool:
@@ -265,7 +374,7 @@ class PDFHandler(FileSystemEventHandler):
             self.processed_files.add(file_path)
 
             # Print the file
-            success = print_pdf(file_path, self.config.printer_name)
+            success = print_pdf(file_path, self.config.printer_name, self.config)
 
             # Additional delay to ensure printing runs
             if self.config.move_delete_delay_seconds > 0:

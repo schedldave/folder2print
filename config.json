@@ -7,5 +7,7 @@
     "printed_folder": "printed",
     "file_extensions": [".pdf"],
     "print_delay_seconds": 2,
-    "move_delete_delay_seconds": 60
+    "move_delete_delay_seconds": 60,
+    "print_method": "acrobat",
+    "acrobat_path": "C:\\Program Files\\Adobe\\Acrobat DC\\Acrobat\\Acrobat.exe"
 }
