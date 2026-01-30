@@ -1,0 +1,10 @@
+{
+    "watch_folder": "C:\\Sync\\PDFs",
+    "printer_name": "",
+    "check_interval_seconds": 1,
+    "delete_after_print": false,
+    "move_after_print": true,
+    "printed_folder": "printed",
+    "file_extensions": [".pdf"],
+    "print_delay_seconds": 2
+}
